@@ -1,0 +1,382 @@
+package dev.sf.theme.handlers;
+
+import com.google.common.collect.ImmutableList;
+import com.mojang.blaze3d.platform.Window;
+import com.mojang.blaze3d.vertex.PoseStack;
+import dev.sf.theme.NhackPlugin;
+import dev.sf.theme.Panel;
+import dev.sf.theme.Theme;
+import dev.sf.theme.items.ModuleItem;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import net.minecraft.client.Minecraft;
+import org.rusherhack.client.api.Globals;
+import org.rusherhack.client.api.RusherHackAPI;
+import org.rusherhack.client.api.events.render.EventRenderScreen;
+import org.rusherhack.client.api.feature.hud.HudElement;
+import org.rusherhack.client.api.feature.hud.IHudElement;
+import org.rusherhack.client.api.feature.hud.ResizeableHudElement;
+import org.rusherhack.client.api.render.IRenderer2D;
+import org.rusherhack.client.api.render.RenderContext;
+import org.rusherhack.client.api.render.font.IFontRenderer;
+import org.rusherhack.client.api.ui.hud.HudHandlerBase;
+import org.rusherhack.client.api.ui.panel.PanelHandlerBase;
+import org.rusherhack.core.event.stage.Stage;
+import org.rusherhack.core.event.subscribe.Subscribe;
+import org.rusherhack.core.interfaces.IClickable;
+import org.rusherhack.core.interfaces.IDraggable;
+import org.rusherhack.core.setting.BooleanSetting;
+import org.rusherhack.core.setting.Setting;
+import org.rusherhack.core.utils.ColorUtils;
+
+import java.awt.*;
+import java.util.*;
+import java.util.List;
+import java.util.stream.StreamSupport;
+
+import static dev.sf.theme.Panel.run;
+
+public class HudHandler extends HudHandlerBase {
+    private final HudManagerHandler HudManagerHandler = new HudManagerHandler();
+
+    public HudHandler(boolean scaledWithMinecraftGui) {
+        super(scaledWithMinecraftGui);
+
+    }
+
+    @Override
+    public PanelHandlerBase<?> getHudManagerPanel() {
+        return this.HudManagerHandler;
+    }
+
+
+    @Override
+    public void renderHudElement(HudElement hudElement, RenderContext renderContext, double mouseX, double mouseY) {
+        if (mc.screen != RusherHackAPI.getThemeManager().getHudEditorScreen() && !shouldRender(hudElement)) {
+            return;
+        }
+
+        final Window window = Globals.mc.getWindow();
+        double x = hudElement.getX();
+        double y = hudElement.getY();
+        final IRenderer2D renderer = hudElement.getRenderer();
+        final IFontRenderer fr = hudElement.getFontRenderer();
+        final boolean building = renderer.isBuilding();
+        final PoseStack matrixStack = renderContext.pose();
+
+        if (x < 0) {
+            hudElement.setX(0);
+        } else if (x > window.getGuiScaledWidth()) {
+            hudElement.setX(window.getGuiScaledWidth());
+        }
+
+        if (y < 0) {
+            hudElement.setY(0);
+        } else if (y > window.getGuiScaledHeight()) {
+            hudElement.setY(window.getGuiScaledHeight());
+        }
+
+        double width = Math.max(hudElement.getScaledWidth(), renderer.getFontRenderer().getStringWidth(hudElement.getName()) + 30 + 12.5) + 1;
+
+        if (!building) {
+            renderer.begin(matrixStack, fr);
+        }
+
+        x = hudElement.getStartX();
+        y = hudElement.getStartY();
+        renderer.getMatrixStack().pushPose();
+
+        renderer.getMatrixStack().translate(-x, -y, 0);
+        
+        // Windows XP HUD title bar with gradient
+        Theme.drawXPGradient(renderer, x, y, width, 13.0, 
+                NhackPlugin.theme.xpTitleBarTop.getValue(), 
+                NhackPlugin.theme.xpTitleBarBottom.getValue());
+        
+        // Windows XP 3D title bar border
+        Theme.drawXPBorder(renderer, x, y, width, 13.0, 
+                NhackPlugin.theme.xpHighlight.getValue(), 
+                NhackPlugin.theme.xpShadow.getValue());
+        
+        // Title text
+        getFontRenderer().drawString(hudElement.getName(), x + 2, y + 2, Color.WHITE.getRGB());
+
+        // Windows XP style visibility button
+        double visibilityButtonX = x + width - 11.5 - 12.5;
+        double visibilityButtonY = y + 1.5;
+        double buttonSize = 10;
+        
+        // Visibility button gradient
+        Theme.drawXPButton(renderer, visibilityButtonX, visibilityButtonY, buttonSize, buttonSize,
+                NhackPlugin.theme.xpButtonTop.getValue(),
+                NhackPlugin.theme.xpButtonBottom.getValue(),
+                shouldRender(hudElement));
+        
+        // Visibility button 3D border
+        Theme.drawXPBorder(renderer, visibilityButtonX, visibilityButtonY, buttonSize, buttonSize,
+                NhackPlugin.theme.xpHighlight.getValue(),
+                NhackPlugin.theme.xpShadow.getValue());
+        
+        // Windows XP style eye icon
+        String eyeIcon = shouldRender(hudElement) ? "●" : "○";
+        getFontRenderer().drawString(eyeIcon, visibilityButtonX + 2, visibilityButtonY + 2, Color.WHITE.getRGB());
+
+        // Windows XP style expand button
+        double expandButtonX = x + width - 11.5;
+        double expandButtonY = y + 1.5;
+        
+        // Expand button gradient
+        Theme.drawXPButton(renderer, expandButtonX, expandButtonY, buttonSize, buttonSize,
+                NhackPlugin.theme.xpButtonTop.getValue(),
+                NhackPlugin.theme.xpButtonBottom.getValue(),
+                isOpen(hudElement));
+        
+        // Expand button 3D border
+        Theme.drawXPBorder(renderer, expandButtonX, expandButtonY, buttonSize, buttonSize,
+                NhackPlugin.theme.xpHighlight.getValue(),
+                NhackPlugin.theme.xpShadow.getValue());
+        
+        // Windows XP style arrow
+        String arrow = isOpen(hudElement) ? "▲" : "▼";
+        getFontRenderer().drawString(arrow, expandButtonX + 2, expandButtonY + 2, Color.WHITE.getRGB());
+
+        renderer.getMatrixStack().popPose();
+
+        if (isOpen(hudElement)) {
+            renderer.getMatrixStack().pushPose();
+            renderer.getMatrixStack().translate(-x, -y, 0);
+            
+            // Windows XP HUD panel background with rounded corners and solid gradient
+            Theme.drawXPRoundedGradient(renderer, x, y + 13 + 2, width, hudElement.getScaledHeight() + 0,
+                    new Color(236, 233, 216),
+                    new Color(212, 208, 200),
+                    4.0); // 4 pixel corner radius
+            
+            // HUD panel 3D border
+            Theme.drawXPBorder(renderer, x, y + 13 + 2, width, hudElement.getScaledHeight() + 0,
+                    NhackPlugin.theme.xpHighlight.getValue(),
+                    NhackPlugin.theme.xpShadow.getValue());
+            renderer.getMatrixStack().popPose();
+
+            renderer.getMatrixStack().pushPose();
+            renderer.getMatrixStack().translate(1, 13 + 2 + 0.5, 0);
+            hudElement.render(renderContext, mouseX, mouseY);
+            renderer.getMatrixStack().popPose();
+
+
+        }
+
+        if (!building) {
+            renderer.end();
+        }
+
+        if (isOpen(hudElement)) {
+            renderer.getMatrixStack().pushPose();
+            renderer.getMatrixStack().translate(1, 13 + 2 + 0.5, 0);
+            hudElement.postRender(renderContext, mouseX, mouseY);
+            renderer.getMatrixStack().popPose();
+        }
+
+    }
+
+    @Override
+    protected boolean consumeElementMouseClick(HudElement element, double mouseX, double mouseY, int button) {
+        double width = Math.max(element.getScaledWidth(), element.getRenderer().getFontRenderer().getStringWidth(element.getName()) + 30 + 12.5) + 1;
+        if (isHovering(mouseX, mouseY, element.getStartX(), element.getStartY(), width - 11.5 - 12.5, 13) && button == 0) {
+            return element.mouseClicked(mouseX, mouseY, button);
+        }
+
+        if (isHovering(mouseX, mouseY, element.getStartX() + width - 11.5, element.getStartY() + 1.5, 10, 10) && button == 0) {
+            setOpen(element, !isOpen(element));
+            return true;
+        }
+
+        if (isHovering(mouseX, mouseY, element.getStartX() + width - 11.5 - 12.5, element.getStartY() + 1.5, 10, 10) && button == 0) {
+            setShouldRender(element, !shouldRender(element));
+            return true;
+        }
+        element.registerSettings();
+        return false;
+    }
+
+    @Override
+    public IFontRenderer getFontRenderer() {
+        return NhackPlugin.theme.forceVanilla.getValue() ? RusherHackAPI.fonts().getVanillaFontRenderer() : super.getFontRenderer();
+    }
+
+    //code in 6:20 am haven't slept all night
+
+    private boolean isOpen(HudElement element) {
+        for (Setting<?> setting : NhackPlugin.theme.getSettings()) {
+            if (setting.getName().equals(element.getName().toLowerCase() + "#is_open")) {
+                return (boolean) setting.getValue();
+            }
+        }
+        NhackPlugin.theme.registerIsOpen(element);
+        return isOpen(element);
+    }
+
+    private boolean shouldRender(HudElement element) {
+        for (Setting<?> setting : NhackPlugin.theme.getSettings()) {
+            if (setting.getName().equals(element.getName().toLowerCase() + "#should_render")) {
+                return (boolean) setting.getValue();
+            }
+        }
+        NhackPlugin.theme.registerShouldRender(element);
+        return shouldRender(element);
+    }
+
+    private void setOpen(HudElement element, boolean value) {
+        for (Setting<?> setting : NhackPlugin.theme.getSettings()) {
+            if (setting.getName().equals(element.getName().toLowerCase() + "#is_open")) {
+                ((BooleanSetting) setting).setValue(value);
+                return;
+            }
+        }
+        NhackPlugin.theme.registerIsOpen(element);
+        setOpen(element, value);
+    }
+
+    private void setShouldRender(HudElement element, boolean value) {
+        for (Setting<?> setting : NhackPlugin.theme.getSettings()) {
+            if (setting.getName().equals(element.getName().toLowerCase() + "#should_render")) {
+                ((BooleanSetting) setting).setValue(value);
+                return;
+            }
+        }
+        NhackPlugin.theme.registerShouldRender(element);
+        setShouldRender(element, value);
+    }
+
+    @Override
+    protected void consumeMouseMove(double mouseX, double mouseY) {
+        for (HudElement element : this.getElements()) {
+            if (!this.isEnabled(element)) continue;
+
+            if (element != null && this.consumeElementMouseMove(element, mouseX, mouseY)) {
+                double x = element.getStartX() + element.getScaledWidth() + 1;
+                double y = element.getStartY() + 1;
+                Window window = Minecraft.getInstance().getWindow();
+                if (x < 0) {
+                    element.setX(0);
+                } else if (x > window.getGuiScaledWidth()) {
+                    element.setX(window.getGuiScaledWidth());
+                }
+
+                if (y < 0) {
+                    element.setY(0);
+                } else if (y > window.getGuiScaledHeight()) {
+                    element.setY(window.getGuiScaledHeight());
+                }
+                break;
+            }
+        }
+    }
+
+    @Override
+    public void mouseReleased(double mouseX, double mouseY, int button) {
+        super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    @Override
+    protected void renderHudElementBackground(HudElement hudElement, RenderContext renderContext, IRenderer2D renderer, double width, double height, int color) {
+
+    }
+
+    public boolean isHovering(double mouseX, double mouseY, double x, double y, double width, double height) {
+        return x < mouseX && width + x > mouseX && y < mouseY && height + y > mouseY;
+    }
+
+    public static class HudManagerHandler extends PanelHandlerBase<Panel> {
+
+        private final Panel panel = new Panel(this, "Hud Elements", 200, 50) {
+            @Override
+            public boolean isHovered(double mouseX, double mouseY) {
+                return super.isHovered(mouseX, mouseY);
+            }
+        };
+
+        public HudManagerHandler() {
+            super(false);
+        }
+
+        @Override
+        public void initialize() {
+            this.addPanel(this.panel);
+
+            //ensure empty
+            this.panel.getItemList().clear();
+            panel.setModuleItems(StreamSupport.stream(RusherHackAPI.getHudManager().getFeatures().spliterator(), false)
+                    .filter(Objects::nonNull)
+                    .sorted(Comparator.comparing(HudElement::getName))//sort by name
+                    .map(hudElement -> new ModuleItem(hudElement, panel))
+                    .toList());
+        }
+
+        @Override
+        public void setDefaultPositions() {
+            this.panel.setX(200);
+            this.panel.setY(50);
+        }
+
+        @Override
+        public void render(RenderContext context, double mouseX, double mouseY) {
+
+            //clamp hud manager position
+            if (this.panel.getX() < 0) {
+                this.panel.setX(0);
+            }
+            if (this.panel.getY() < 0) {
+                this.panel.setY(0);
+            }
+
+            final Window window = Globals.mc.getWindow();
+            final float scale = this.getScale();
+
+            final double panelWidth = this.panel.getScaledWidth();
+            if (this.panel.getX() * scale + panelWidth > window.getGuiScaledWidth()) {
+                this.panel.setX((window.getGuiScaledWidth() - panelWidth) / scale);
+            }
+
+            super.render(context, mouseX, mouseY);
+        }
+
+
+        @Override
+        public void renderElements(RenderContext renderContext, double mouseX, double mouseY) {
+            final PoseStack matrixStack = renderContext.pose();
+            final IRenderer2D renderer = this.getRenderer();
+
+            if (!renderer.isBuilding()) renderer.begin(matrixStack, this.getFontRenderer());
+
+            for (Panel element : this.getElements()) {
+                if (!this.isEnabled(element)) continue;
+                if (element == null) continue;
+
+                matrixStack.translate(0, 0, 100);
+                element.render(renderContext, mouseX, mouseY);
+
+            }
+            if (!renderer.isBuilding()) renderer.end();
+
+        }
+
+
+        @Override
+        public IFontRenderer getFontRenderer() {
+            return NhackPlugin.theme.forceVanilla.getValue() ? RusherHackAPI.fonts().getVanillaFontRenderer() : super.getFontRenderer();
+        }
+
+        @Override
+        public float getScale() {
+            return super.getScale();
+        }
+
+        @Override
+        public Panel createPanel(String name) {
+            return new Panel(this, name, 200, 50);
+        }
+    }
+
+
+}
