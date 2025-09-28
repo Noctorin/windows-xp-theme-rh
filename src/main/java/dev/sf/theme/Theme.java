@@ -132,10 +132,10 @@ public class Theme extends ThemeBase {
         return NhackPlugin.hudHandler;
     }
 
-	@Override
-	public @Nullable WindowHandlerBase getWindowHandler() {
-		return null;
-	}
+    @Override
+    public @Nullable WindowHandlerBase getWindowHandler() {
+        return new dev.sf.theme.handlers.WindowHandler();
+    }
 
 
 
@@ -184,23 +184,23 @@ public class Theme extends ThemeBase {
         renderer.drawRectangle(x + width - 1, y, 1, height, darkColor.getRGB());
     }
 
-    // Windows XP rounded rectangle with gradient (top corners only) using circles and rectangle
+    // rounded rectangle with circle
     public static void drawXPRoundedGradient(org.rusherhack.client.api.render.IRenderer2D renderer, double x, double y, double width, double height, Color topColor, Color bottomColor, double radius) {
         // Draw the main gradient rectangle (covers most of the area)
         drawXPGradient(renderer, x + radius, y, width - 2 * radius, height, topColor, bottomColor);
         
-        // Draw the left rounded corner using a circle
+        // draw the left rounded corner using a circle
         drawXPGradientCircle(renderer, x + radius, y + radius, radius, topColor, bottomColor, true, true);
         
-        // Draw the right rounded corner using a circle
+        // draw the right rounded corner using a circle
         drawXPGradientCircle(renderer, x + width - radius, y + radius, radius, topColor, bottomColor, false, true);
         
-        // Fill any gaps with small rectangles
+        // fill gaps
         drawXPGradient(renderer, x, y + radius, radius, height - radius, topColor, bottomColor);
         drawXPGradient(renderer, x + width - radius, y + radius, radius, height - radius, topColor, bottomColor);
     }
     
-    // Helper method to draw a solid color circle for rounded corners
+
     private static void drawXPGradientCircle(org.rusherhack.client.api.render.IRenderer2D renderer, double centerX, double centerY, double radius, Color topColor, Color bottomColor, boolean leftCorner, boolean topCorner) {
         int radiusInt = (int) radius;
         
@@ -209,15 +209,28 @@ public class Theme extends ThemeBase {
                 double distance = Math.sqrt(i * i + j * j);
                 
                 if (distance <= radius) {
-                    // Calculate the position relative to the corner
+                    // calc the position relative to the corner
                     double pixelX = leftCorner ? (centerX - i) : (centerX + i);
                     double pixelY = topCorner ? (centerY - j) : (centerY + j);
                     
-                    // Use solid top color for the entire circle to match the gradient start
+                    
                     renderer.drawRectangle(pixelX, pixelY, 1, 1, topColor.getRGB());
                 }
             }
         }
+    }
+
+    /**
+     * Draws a Windows XP inset border (for input fields, etc.)
+     */
+    public static void drawXPInsetBorder(org.rusherhack.client.api.render.IRenderer2D renderer, double x, double y, double width, double height, Color shadowColor, Color highlightColor) {
+        // Top and left borders (shadow - darker)
+        renderer.drawRectangle(x, y, width, 1, shadowColor.getRGB());
+        renderer.drawRectangle(x, y, 1, height, shadowColor.getRGB());
+        
+        // Bottom and right borders (highlight - lighter)
+        renderer.drawRectangle(x, y + height - 1, width, 1, highlightColor.getRGB());
+        renderer.drawRectangle(x + width - 1, y, 1, height, highlightColor.getRGB());
     }
 
 }
